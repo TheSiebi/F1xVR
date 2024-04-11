@@ -23,8 +23,8 @@ public class SphereMove : MonoBehaviour
     List<float> interpolatedPosX = new List<float>(); // Store the interpolated positions
     List<float> interpolatedPosY = new List<float>(); // Store the interpolated positions
     List<DateTime> interpolatedPosTime = new List<DateTime>(); // Store the interpolated times
-    const int N = 15; // Do interpolation with 7 points ahead and 7 points behind
-    const int M = 35; // Interpolation points = N * M for each trajectory
+    const int N = 7; // Do interpolation with 7 points ahead and 7 points behind
+    const int M = 15; // Interpolation points = N * M for each trajectory
     State currentState = State.Begin;
 
     DateTime current_tracking_time;
@@ -175,16 +175,18 @@ public class SphereMove : MonoBehaviour
                                         need_new_trajectory = false;
                                         // Update the car position
                                         Debug.Log("New Trajectory generated");
+                                        yield return new WaitUntil(() => need_new_trajectory);
                                     }
                                 }
                                 else
                                 {
                                     Debug.Log("Empty measurement");
+                                    yield return new WaitForSeconds(updateInterval);
                                 }
                             }
                         }
                     }
-                    yield return new WaitForSeconds(updateInterval/10);
+                    yield return new WaitForSeconds(updateInterval);
                     break;
                 default:
                     yield return new WaitForSeconds(5);
@@ -194,6 +196,7 @@ public class SphereMove : MonoBehaviour
         }
     }
 
+    bool isLerping = false; // Flag to track if lerping is in progress
     // Update is called once per frame
     IEnumerator DelayedUpdate()
     {
@@ -209,14 +212,14 @@ public class SphereMove : MonoBehaviour
                         current_tracking_time = listTime[0];
                         for (int i = 0; i < interpolatedPosX.Count; i++)
                         {
-                            Thread.Sleep((int) Math.Round((interpolatedPosTime[i] - current_tracking_time).TotalSeconds * 1000)); // Blocked sleep in ms
                             car.x = interpolatedPosX[i];
                             car.y = interpolatedPosY[i];
                             car.date = interpolatedPosTime[i].ToString("yyyy-MM-ddTHH:mm:ss.ffffff");
                             Vector3 newPosition = new Vector3(car.x, car.y, this.gameObject.transform.localPosition.z);
-                            this.gameObject.transform.localPosition = newPosition;
-                            Debug.Log("Update x=" + this.gameObject.transform.localPosition.x.ToString() + "y=" + this.gameObject.transform.localPosition.y.ToString());
+                            isLerping = true;
+                            StartCoroutine(LerpToPosition(newPosition, (float)(interpolatedPosTime[i] - current_tracking_time).TotalSeconds));
                             current_tracking_time = interpolatedPosTime[i];
+                            yield return new WaitUntil(() => !isLerping);
                         }
                         interpolatedPosTime.Clear();
                         interpolatedPosX.Clear();
@@ -225,29 +228,28 @@ public class SphereMove : MonoBehaviour
                         currentState = State.Running;
                         Debug.Log("State -> Running");
                     }
-                    yield return new WaitForSeconds((float)0.0001);
+                    yield return new WaitUntil(() => !need_new_trajectory);
                     break;
                 case State.Running:
                     if (!need_new_trajectory)
                     {
                         for (int i = 0; i < interpolatedPosX.Count; i++)
                         {
-                            // TODO: if we let it sleep until the next position point, it will anyway be unsmooth
-                            Thread.Sleep((int)Math.Round((interpolatedPosTime[i] - current_tracking_time).TotalSeconds * 1000)); // Blocked sleep in ms
                             car.x = interpolatedPosX[i];
                             car.y = interpolatedPosY[i];
                             car.date = interpolatedPosTime[i].ToString("yyyy-MM-ddTHH:mm:ss.ffffff");
                             Vector3 newPosition = new Vector3(car.x, car.y, this.gameObject.transform.localPosition.z);
-                            this.gameObject.transform.localPosition = newPosition;
-                            Debug.Log("Update x=" + this.gameObject.transform.localPosition.x.ToString() + "y=" + this.gameObject.transform.localPosition.y.ToString());
+                            isLerping = true;
+                            StartCoroutine(LerpToPosition(newPosition, (float)(interpolatedPosTime[i] - current_tracking_time).TotalSeconds));
                             current_tracking_time = interpolatedPosTime[i];
+                            yield return new WaitUntil(() => !isLerping);
                         }
                         interpolatedPosTime.Clear();
                         interpolatedPosX.Clear();
                         interpolatedPosY.Clear();
                         need_new_trajectory = true;
                     }
-                    yield return new WaitForSeconds((float) 0.0001);
+                    yield return new WaitUntil(() => !need_new_trajectory);
                     break;
                 default:
                     yield return new WaitForSeconds(updateInterval);
@@ -259,6 +261,22 @@ public class SphereMove : MonoBehaviour
         // -------------- TODO ------------------
         // StopCoroutine("GetCarData") when race finished
         // Either stop it here in update() or stop it in the IEnumerator
+    }
+
+    IEnumerator LerpToPosition(Vector3 targetPosition, float duration)
+    {
+        Vector3 startPosition = this.gameObject.transform.localPosition;
+        float timeElapsed = 0f;
+        while (timeElapsed < duration)
+        {
+            this.gameObject.transform.localPosition = Vector3.Lerp(startPosition, targetPosition, timeElapsed / duration);
+            Debug.Log("Lerp update x=" + this.gameObject.transform.localPosition.x.ToString() + "y=" + this.gameObject.transform.localPosition.y.ToString());
+            timeElapsed += Time.deltaTime;
+            yield return null;
+        }
+        // Ensure the final position is exactly the target position
+        this.gameObject.transform.localPosition = targetPosition;
+        isLerping = false;
     }
 
     // Return in format utcDateTime+durationSec
