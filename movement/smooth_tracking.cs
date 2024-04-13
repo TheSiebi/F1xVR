@@ -16,18 +16,19 @@ public class SphereMove : MonoBehaviour
 {
     string json; // Variable to store received JSON data
     CarData car = new CarData(); // the current car info
-    float updateInterval = 1f / 3.7f; // x frequency of approximately 3.7Hz
+
     string url = "https://api.openf1.org/v1/location?session_key=9157&driver_number=81"; // An event at Monza
 
-    List<float> listX = new List<float>(); // List for x positions
-    List<float> listY = new List<float>(); // List for y positions
-    List<DateTime> listTime = new List<DateTime>(); // List for times
+    Queue<float> listX = new Queue<float>(); // List for x positions
+    Queue<float> listY = new Queue<float>(); // List for y positions
+    Queue<DateTime> listTime = new Queue<DateTime>(); // List for times
 
     const int threshold = 3; // # number of non-zero data points required to start
 
     bool start_game = false;
     State currentState = State.Begin;
 
+    DateTime current_appending_time;
     DateTime current_tracking_time;
 
 
@@ -38,11 +39,11 @@ public class SphereMove : MonoBehaviour
         // this.gameObject.transform.localPosition = new Vector3(-320, -2052, -140); // Random pick of a initial point, can be deleted
         StartCoroutine("FetchandCacheData"); // Start the coroutine to retrieve data from openF1
         StartCoroutine("UpdateCarData");
-
     }
 
     IEnumerator FetchandCacheData()
     {
+
         while (true)
         {
             switch (currentState)
@@ -66,35 +67,35 @@ public class SphereMove : MonoBehaviour
 
                                 // Check if any entry has 'x' or 'y' not zero, meaning car moves
                                 // This is for real-time game, if the car has not moved, the x y will all be 0
-                                int count = 0;
                                 foreach (CarData data in carDataArray)
                                 {
                                     if (data.x == 0 && data.y == 0) { continue; }
-                                    if (count < threshold)
+                                    if (listY.Count < threshold + 1)
                                     {
-                                        listTime.Add(GetDateTime(data.date));
-                                        listX.Add((float)(-data.x * 0.1));
-                                        listY.Add((float)(data.y * 0.1));
-                                        count += 1;
+                                        listTime.Enqueue(GetDateTime(data.date));
+                                        listX.Enqueue((float)(-data.x * 0.1));
+                                        listY.Enqueue((float)(data.y * 0.1));
+                                        current_appending_time = GetDateTime(data.date);
                                     }
                                     else // Get N points
                                     {
                                         break;
                                     }
                                 }
-                                if (count >= threshold)
+                                if (listY.Count >= threshold + 1)
                                 {
                                     start_game = true;
-                                    car.x = listX[0];
-                                    car.y = listY[0];
-                                    car.date = listTime[0].ToString("yyyy-MM-ddTHH:mm:ss.ffffff");
-                                    current_tracking_time = listTime[0];
+                                    car.x = listX.Dequeue();
+                                    car.y = listY.Dequeue();
+                                    current_tracking_time = listTime.Dequeue();
+                                    car.date = current_tracking_time.ToString("yyyy-MM-ddTHH:mm:ss.ffffff");
+
                                     Vector3 newPosition = new Vector3(car.x, car.y, this.gameObject.transform.localPosition.z);
                                     this.gameObject.transform.localPosition = newPosition;
                                     Debug.Log("Initial x=" + this.gameObject.transform.localPosition.x.ToString() + "y=" + this.gameObject.transform.localPosition.y.ToString());
                                     currentState = State.Running;
                                     Debug.Log("State -> Running");
-                                    yield return new WaitUntil( () => listX.Count < 3); // Wait for update interval before making the next request
+                                    yield return new WaitUntil(() => listX.Count < threshold); // Wait for update interval before making the next request
                                 }
                                 else
                                 {
@@ -108,8 +109,8 @@ public class SphereMove : MonoBehaviour
                     }
                     break;
                 case State.Running:
-                    url = "https://api.openf1.org/v1/location?session_key=9157&driver_number=81&date>" + listTime[listTime.Count - 1].ToString("yyyy-MM-ddTHH:mm:ss.ffffff")
-                        + "&date<" + GetNextSecond(listTime[listTime.Count - 1].ToString("yyyy-MM-ddTHH:mm:ss.ffffff"), 2);
+                    url = "https://api.openf1.org/v1/location?session_key=9157&driver_number=81&date>" + current_appending_time.ToString("yyyy-MM-ddTHH:mm:ss.ffffff")
+                        + "&date<" + GetNextSecond(current_appending_time.ToString("yyyy-MM-ddTHH:mm:ss.ffffff"), 20);
                     Debug.Log("Try get url" + url); // Retrieve the next 2s car data
                     using (UnityWebRequest www = UnityWebRequest.Get(url))
                     {
@@ -129,9 +130,11 @@ public class SphereMove : MonoBehaviour
 
                                 foreach (CarData data in carDataArray)
                                 {
-                                    listTime.Add(GetDateTime(data.date));
-                                    listX.Add((float)(-data.x * 0.1));
-                                    listY.Add((float)(data.y * 0.1));
+                                    listTime.Enqueue(GetDateTime(data.date));
+                                    listX.Enqueue((float)(-data.x * 0.1));
+                                    listY.Enqueue((float)(data.y * 0.1));
+                                    current_appending_time = GetDateTime(data.date);
+                                    yield return null;
                                 }
                             }
                             else
@@ -140,7 +143,7 @@ public class SphereMove : MonoBehaviour
                             }
                         }
                     }
-                    yield return new WaitUntil( () => listX.Count < 3);
+                    yield return new WaitUntil(() => listX.Count < threshold);
                     break;
                 default:
                     yield return null;
@@ -154,39 +157,22 @@ public class SphereMove : MonoBehaviour
 
     IEnumerator UpdateCarData()
     {
+        yield return new WaitUntil(() => start_game && listX.Count >= 2);
         // Run through interpolatePosX elements and update when the respective time is reached
         while (true)
         {
-            if (start_game)
-            {
-                Debug.Log("UpdateCarData while called.");
-                if (listX.Count >= 1)
-                {
-                    Debug.Log("UpdateCarData call Lerp.");
-                    car.x = listX[0];
-                    car.y = listY[0];
-                    car.date = listTime[0].ToString("yyyy-MM-ddTHH:mm:ss.ffffff");
-                    Vector3 newPosition = new Vector3(car.x, car.y, this.gameObject.transform.localPosition.z);
-                    isLerping = true;
-                    StartCoroutine(LerpToPosition(newPosition, (float)(listTime[0] - current_tracking_time).TotalSeconds));
-                    current_tracking_time = listTime[0];
+            Debug.Log("UpdateCarData while called.");
+            Debug.Log("UpdateCarData call Lerp.");
+            car.x = listX.Dequeue();
+            car.y = listY.Dequeue();
+            DateTime destination_time = listTime.Dequeue();
+            car.date = destination_time.ToString("yyyy-MM-ddTHH:mm:ss.ffffff");
+            Vector3 newPosition = new Vector3(car.x, car.y, this.gameObject.transform.localPosition.z);
+            isLerping = true;
+            StartCoroutine(LerpToPosition(newPosition, (float)(destination_time - current_tracking_time).TotalSeconds));
+            current_tracking_time = destination_time;
 
-                    // Remove the first element in the lists 
-                    listX.RemoveAt(0);
-                    listY.RemoveAt(0);
-                    listTime.RemoveAt(0);
-                    yield return new WaitUntil(() => (!isLerping) && listX.Count >= 1);
-                }
-                else
-                {
-                    Debug.Log("WARNING: Not enough points in listX.");
-                    yield return new WaitForSeconds(updateInterval);
-                }
-            }
-            else
-            {
-                yield return new WaitUntil(() => start_game);
-            }
+            yield return new WaitUntil(() => (!isLerping) && listX.Count >= 2);
         }
 
         // -------------- TODO ------------------
@@ -197,12 +183,11 @@ public class SphereMove : MonoBehaviour
     IEnumerator LerpToPosition(Vector3 targetPosition, float duration)
     {
         Vector3 startPosition = this.gameObject.transform.localPosition;
-        float timeElapsed = 0f;
-        while (timeElapsed < duration)
+        float startTime = Time.time;
+        while ((Time.time - startTime) < duration)
         {
-            this.gameObject.transform.localPosition = Vector3.Lerp(startPosition, targetPosition, timeElapsed / duration);
+            this.gameObject.transform.localPosition = Vector3.Lerp(startPosition, targetPosition, (Time.time - startTime) / duration);
             Debug.Log("Lerp update x=" + this.gameObject.transform.localPosition.x.ToString() + "y=" + this.gameObject.transform.localPosition.y.ToString());
-            timeElapsed += Time.deltaTime;
             yield return null;
         }
         // Ensure the final position is exactly the target position
