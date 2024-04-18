@@ -47,7 +47,7 @@ public class SmoothTracking : MonoBehaviour
             url = "https://api.openf1.org/v1/location?session_key=" + session_key + "&driver_number=" + driver_number; // An event at Monza
             using (UnityWebRequest www = UnityWebRequest.Get(url))
             {
-                yield return www.SendWebRequest();gi
+                yield return www.SendWebRequest();
 
                 if (www.result == UnityWebRequest.Result.ConnectionError || www.result == UnityWebRequest.Result.ProtocolError)
                 {
@@ -177,25 +177,26 @@ public class SmoothTracking : MonoBehaviour
     {
         Vector3 startPosition = this.gameObject.transform.localPosition;
         float startTime = Time.time;
-        Vector3 up = new Vector3(0,0,1);
-        Vector3 direction;
-        while ((Time.time - startTime) < duration)
-        {   
-            direction = (targetPosition - startPosition).normalized;
-            // Debug.Log("direction update" + direction.x.ToString() + "y=" + direction.y.ToString() + "z=" + direction.z.ToString());
-            this.gameObject.transform.localPosition = Vector3.Lerp(startPosition, targetPosition, (Time.time - startTime) / duration);
-            Debug.Log("Lerp update x=" + this.gameObject.transform.localPosition.x.ToString() + "y=" + this.gameObject.transform.localPosition.y.ToString());
 
+        Vector3 up = new Vector3(0, 0, 1);
+        Vector3 direction;
+
+        while ((Time.time - startTime) < duration)
+        {
+            rb.MovePosition(Vector3.Lerp(startPosition, targetPosition, (Time.time - startTime) / duration));
+            if (enableDebugLogs) Debug.Log("Lerp update x=" + this.gameObject.transform.localPosition.x.ToString() + "y=" + this.gameObject.transform.localPosition.y.ToString());
+            
+            direction = (targetPosition - startPosition).normalized;
             if (direction != Vector3.zero)
-            {             
-                Quaternion targetRotation = Quaternion.LookRotation(direction,up);
-                this.gameObject.transform.rotation = Quaternion.Lerp(this.gameObject.transform.rotation, targetRotation,(Time.time - startTime) / duration);
+            {
+                Quaternion targetRotation = Quaternion.LookRotation(direction, up);
+                rb.MoveRotation(Quaternion.Lerp(this.gameObject.transform.rotation, targetRotation, (Time.time - startTime) / duration));
 
             }
             yield return null;
         }
         // Ensure the final position is exactly the target position
-        this.gameObject.transform.localPosition = targetPosition;
+        rb.MovePosition(targetPosition);
         isLerping = false;
     }
 
