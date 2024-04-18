@@ -12,8 +12,8 @@ public class SmoothTracking : MonoBehaviour
     CarData car = new CarData(); // the current car info
 
     string url; // URL to fetch from
-    const string session_key = "9157";
-    const string driver_number = "81";
+    public string session_key = "9157";
+    public string driver_number = "81";
 
     Queue<float> listX = new Queue<float>(); // List for x positions
     Queue<float> listY = new Queue<float>(); // List for y positions

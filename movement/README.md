@@ -15,6 +15,9 @@ For the z-axis in the map (the gravity axis), I did not set car.z, which can be 
 
 The Monza_traj.py will generate data and plot for this race in Monza. Might be helpful for coordinate transformation and speed inspection.
 
+### Instantiation.cs
+Instantiation.cs is the script that runs instantiates all the cars. In your scene, create an empty object and attach this script to it as a component. You can then simply click play and it will take care of rendering the cars (currenly spheres) and fetching the data for each driver. 
+
 ### SmoothTracking.cs
 
 - Only transformations are setting the scale to 0.1 and flipping x inputs which seem to be mirrored against the orientation of the map.
@@ -94,3 +97,4 @@ The Monza_traj.py will generate data and plot for this race in Monza. Might be h
    
 
 7. Run play, and if necessary swap from the "play" mode to "scene" mode to be able to watch the whole map.
+
