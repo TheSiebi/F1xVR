@@ -5,7 +5,6 @@
 1. Add a 3D sphere to the SampleScene.
 2. Attach SmoothTracking.cs script to the 3D sphere.
 3. Add camera to the scene if wanted.
-4. Go Edit->Project Settings->Physics, make sure the gravity axis is in z, not default y.
 
 For the z-axis in the map (the gravity axis), I did not set car.z, which can be obtained from the retrieved data. Instead I added mesh collider component (in the Inspector) for the map and rigidbody component for the sphere so then it will have gravitational force. I haven’t tried setting the car.z, can be tried.
 
@@ -93,4 +92,8 @@ The Monza_traj.py will generate data and plot for this race in Monza. Might be h
 
    
 
-7. Run play, and if necessary swap from the "play" mode to "scene" mode to be able to watch the whole map.
+7. Unity Edit -> Project Settings
+
+   ![proj_setting](C:/Users/ASUS/Desktop/MSc_Term1_2/VRI/Proj/F1xVR/gitRepo/F1xVR/movement/README.assets/proj_setting.png)
+
+8. Run play, and if necessary swap from the "play" mode to "scene" mode to be able to watch the whole map.
