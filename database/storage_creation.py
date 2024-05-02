@@ -1,5 +1,3 @@
-# This file sets up a MySQL database, downloads country data, and stores it in the database.
-
 # We need the location data and for that we need to know the meeting key and the session key and the driver number. 
 # We therefore need to create three databases: location, meeting, and session. 
 
@@ -9,38 +7,63 @@
 from urllib.request import urlopen
 import json
 import pandas as pd
-from sqlalchemy import create_engine
-import mysql.connector
 import os
 
-countries = ['Bahrain','Saudi Arabia','Australia','Azerbaijan','United States','Monaco','Spain','Canada','Austria','Great Britain','Hungary','Belgium','Netherlands','Italy','Singapore','Japan','Qatar','Mexico','Brazil','United Arab Emirates']
 
-if not os.path.exists('sessions.csv'):
+class Event:
 
-    df_session = pd.DataFrame()
-    for country in countries:
-        if ' ' in country:
-            country = country.replace(' ','%20')
-        response = urlopen(f'https://api.openf1.org/v1/sessions?country_name={country}&year=2023')
+    location: str
+    session: str
+    year: str
+    df_session: pd.DataFrame
+    driver_list: list
+    session_key: str
+
+    def __init__(self):
+        self.location = None
+        self.session = None
+        self.session_key = None
+        self.driver_list = None
+        self.year = '2023'
+
+        # Set up session csv
+        if not os.path.exists('database/sessions.csv'):
+            response = urlopen(f'https://api.openf1.org/v1/sessions?&year={self.year}')
+            data = json.loads(response.read().decode('utf-8'))
+            self.df_session = pd.DataFrame(data)
+            self.df_session.to_csv('database/sessions.csv', index=True) 
+
+        else:
+            self.df_session = pd.read_csv('database/sessions.csv')
+
+    def promptRaceAndSession(self):
+        self.location = input('Enter the location: ')
+        self.session = input('Enter the type of event: ') # Options are: 'Race', 'Qualifying', 'Practice 1', 'Practice 2', 'Practice 3', 'Sprint', 'Sprint Shootout'
+        filtered_data = self.df_session[(self.df_session['session_name'] == self.session) & (self.df_session['circuit_short_name'] == self.location)]
+        self.session_key = filtered_data['session_key'].values[0]
+
+        # Get the drivers that are participating in a particular session
+        response = urlopen(f'https://api.openf1.org/v1/drivers?&session_key={self.session_key}')
         data = json.loads(response.read().decode('utf-8'))
 
-        df_session = pd.concat([df_session, pd.DataFrame(data)], ignore_index=True)
+        df_driver = pd.DataFrame(data)
+        self.driver_list = [str(value) for value in df_driver['driver_number'].values.tolist()]
 
-    # Save as CSV file
-    df_session.to_csv('sessions.csv', index=True)
+    
+    def getDriverNumbers(self):
+        if self.driver_list is None:
+            self.promptRaceAndSession()
+        return self.driver_list
+    
+    def getSessionKey(self):
+        if self.session_key is None:
+            self.promptRaceAndSession()
+        return self.session_key
 
-else:
-    df_session = pd.read_csv('sessions.csv')
 
+event = Event()
 
-# Get location data based on interested race.
+event.promptRaceAndSession()
 
-interest = 'Singapore'
-
-# join dataframes on 
-# result = pd.merge(df_meeting, df_session, on='country_code', how='inner')
-filtered_data = df_session[(df_session['session_name'] == 'Race') & (df_session['circuit_short_name'] == interest)]
-
-session_key = filtered_data['session_key'].values[0]
-
-print(session_key)
+print(event.getDriverNumbers())
+print(event.getSessionKey())
