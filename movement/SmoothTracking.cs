@@ -12,14 +12,15 @@ public class SmoothTracking : MonoBehaviour
     CarData car = new CarData(); // the current car info
 
     string url; // URL to fetch from
-    public string session_key = "9157";
-    public string driver_number = "81";
+    public string session_key;
+    public string driver_number;
 
     Queue<float> listX = new Queue<float>(); // List for x positions
     Queue<float> listY = new Queue<float>(); // List for y positions
     Queue<DateTime> listTime = new Queue<DateTime>(); // List for times
 
     const int threshold = 15; // try to always keep at least 15 destinations in the listX
+    int start_count = 0;
 
     bool start_game = false;
     bool is_fetching = false;
@@ -28,7 +29,7 @@ public class SmoothTracking : MonoBehaviour
     DateTime current_appending_time;
     DateTime current_tracking_time;
 
-    bool enableDebugLogs = false;
+    bool enableDebugLogs = true;
 
     Rigidbody rb; // Rigidbody component reference
 
@@ -44,7 +45,7 @@ public class SmoothTracking : MonoBehaviour
     {
         while (!start_game)
         {
-            url = "https://api.openf1.org/v1/location?session_key=" + session_key + "&driver_number=" + driver_number; // An event at Monza
+            url = "https://api.openf1.org/v1/location?session_key=" + session_key + "&driver_number=" + driver_number; // An event at Monza + "&date>2023-09-03T14:10:32.652000+02:00"
             using (UnityWebRequest www = UnityWebRequest.Get(url))
             {
                 yield return www.SendWebRequest();
@@ -63,7 +64,12 @@ public class SmoothTracking : MonoBehaviour
                     // This is for real-time game, if the car has not moved, the x y will all be 0
                     foreach (CarData data in carDataArray)
                     {
-                        if (data.x == 0 && data.y == 0) { continue; }
+                        if(start_count < 18000){
+                            start_count += 1;
+                            continue;
+                        }
+                        start_count += 1;
+                        // if (data.x == 0 && data.y == 0) { continue; }
                         if (listX.Count < threshold + 1)
                         {
                             listTime.Enqueue(GetDateTime(data.date));
@@ -82,7 +88,7 @@ public class SmoothTracking : MonoBehaviour
                         car.x = listX.Dequeue();
                         car.y = listY.Dequeue();
                         current_tracking_time = listTime.Dequeue();
-                        car.date = current_tracking_time.ToString("yyyy-MM-ddTHH:mm:ss.ffffff");
+                        car.date = current_tracking_time.ToString("yyyy-MM-ddTHH:mm:ss.ffffffzzz");
 
                         Vector3 newPosition = new Vector3(car.x, car.y, this.gameObject.transform.localPosition.z);
                         rb.MovePosition(newPosition);
@@ -103,8 +109,8 @@ public class SmoothTracking : MonoBehaviour
 
     IEnumerator FetchandCacheData()
     {
-        url = "https://api.openf1.org/v1/location?session_key=9157&driver_number=81&date>" + current_appending_time.ToString("yyyy-MM-ddTHH:mm:ss.ffffff")
-            + "&date<" + GetNextSecond(current_appending_time.ToString("yyyy-MM-ddTHH:mm:ss.ffffff"), 2);
+        url = "https://api.openf1.org/v1/location?session_key="+session_key+"&driver_number="+driver_number+"&date>" + current_appending_time.ToString("yyyy-MM-ddTHH:mm:ss.ffffffzzz")
+            + "&date<" + GetNextSecond(current_appending_time.ToString("yyyy-MM-ddTHH:mm:ss.ffffffzzz"), 2);
         if (enableDebugLogs) Debug.Log("Try get url" + url); // Retrieve the next 2s car data
         using (UnityWebRequest www = UnityWebRequest.Get(url))
         {
@@ -158,7 +164,7 @@ public class SmoothTracking : MonoBehaviour
             car.x = listX.Dequeue();
             car.y = listY.Dequeue();
             DateTime destination_time = listTime.Dequeue();
-            car.date = destination_time.ToString("yyyy-MM-ddTHH:mm:ss.ffffff");
+            car.date = destination_time.ToString("yyyy-MM-ddTHH:mm:ss.ffffffzzz");
             Vector3 newPosition = new Vector3(car.x, car.y, this.gameObject.transform.localPosition.z);
             isLerping = true;
             // Start the coroutine to lerp to the first destination in list
@@ -185,6 +191,7 @@ public class SmoothTracking : MonoBehaviour
         {
             rb.MovePosition(Vector3.Lerp(startPosition, targetPosition, (Time.time - startTime) / duration));
             if (enableDebugLogs) Debug.Log("Lerp update x=" + this.gameObject.transform.localPosition.x.ToString() + "y=" + this.gameObject.transform.localPosition.y.ToString());
+            if (enableDebugLogs) Debug.Log("Car number: " + driver_number + "Time Stamp" + car.date);
             
             direction = (targetPosition - startPosition).normalized;
             if (direction != Vector3.zero)
@@ -204,14 +211,14 @@ public class SmoothTracking : MonoBehaviour
     public static string GetNextSecond(string utcDateTime, double durationSec = 10)
     {
         // Parse the input string to DateTime object
-        if (DateTime.TryParseExact(utcDateTime, "yyyy-MM-ddTHH:mm:ss.ffffff",
+        if (DateTime.TryParseExact(utcDateTime, "yyyy-MM-ddTHH:mm:ss.ffffffzzz",
                                     CultureInfo.InvariantCulture,
                                     DateTimeStyles.None,
                                     out DateTime dt))
         {
             dt = dt.AddSeconds(durationSec);
             // Format the DateTime object to ISO 8601 format
-            return dt.ToString("yyyy-MM-ddTHH:mm:ss.ffffff");
+            return dt.ToString("yyyy-MM-ddTHH:mm:ss.ffffffzzz");
         }
         else
         {
@@ -222,15 +229,17 @@ public class SmoothTracking : MonoBehaviour
 
     public DateTime GetDateTime(string utcDateTime)
     {
-        // Have no idea why there's a fking '2023-09-03T13:48:36' without microsec in Monza date data
+        // Have no idea why there's a '2023-09-03T13:48:36' without microsec in Monza date data
         // So I append 000000 to make it '2023-09-03T13:48:36.000000'
-        if (!utcDateTime.Contains('.'))
+        int offsetIndex = utcDateTime.LastIndexOf('+'); // Find the index of the timezone offset
+        if (offsetIndex != -1 && !utcDateTime.Contains('.'))
         {
-            utcDateTime += ".000000";
+            // Insert ".000000" before the timezone offset
+            utcDateTime = utcDateTime.Substring(0, offsetIndex) + ".000000" + utcDateTime.Substring(offsetIndex);
         }
 
         // Parse the input string to DateTime object
-        if (DateTime.TryParseExact(utcDateTime, "yyyy-MM-ddTHH:mm:ss.ffffff",
+        if (DateTime.TryParseExact(utcDateTime, "yyyy-MM-ddTHH:mm:ss.ffffffzzz",
                                     CultureInfo.InvariantCulture,
                                     DateTimeStyles.None,
                                     out DateTime dt))
