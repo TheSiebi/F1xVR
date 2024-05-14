@@ -15,9 +15,10 @@ public class SmoothTrackingOffline : MonoBehaviour
     // Variables for the race
     public GameObject car_coloured;
     string session_key = "9157";
-    List<int> driver_numbers = new List<int> { 1, 2, 4, 10, 11, 14 }; //, 16, 18, 20, 22, 23, 27, 31, 40, 44, 55, 63, 77, 81 };
+    List<int> driver_numbers = new List<int> { 1, 2, 4, 10, 11, 14, 16, 18, 20, 22, 23, 27, 31, 40, 44, 55, 63, 77, 81 };
     List<Rigidbody> cars_rb = new List<Rigidbody>();
     Dictionary<int, string> driver_names = new Dictionary<int, string>(); // Dictionary to store driver numbers and names
+    Dictionary<int, (Color, Color)> driver_colors = new Dictionary<int, (Color, Color)>();
 
     // Variables for the trajectories
     int current_tracking_time_idx = 0;
@@ -44,12 +45,27 @@ public class SmoothTrackingOffline : MonoBehaviour
         current_tracking_time_idx = 0;
         for (int i = 0; i < driver_numbers.Count; i++)
         {
+            // Position
             Vector3 position = new Vector3(listX[i].Peek(), listY[i].Peek(), 20);
-
             GameObject car = Instantiate(car_coloured, position, Quaternion.identity);
             car.transform.position = position;
             car.transform.localScale = new Vector3(1f, 1f, 1f);
 
+            // Color
+            Renderer renderer = car.GetComponent<Renderer>();
+            foreach (Material material in renderer.materials)
+            {
+                if (material.name == "Ferrari_Red (Instance)")
+                {
+                    material.color = driver_colors[driver_numbers[i]].Item1;
+                }
+                else if (material.name == "Black (Instance)")
+                {
+                    material.color = driver_colors[driver_numbers[i]].Item2;
+                }
+            }
+
+            // Rigidbody
             BoxCollider boxCollider = car.AddComponent<BoxCollider>();
             Rigidbody rb = car.AddComponent<Rigidbody>();
             rb.useGravity = true;
@@ -58,7 +74,7 @@ public class SmoothTrackingOffline : MonoBehaviour
             rb.mass = 200;
             cars_rb.Add(rb);
 
-            // Add driver name text
+            // Name text
             GameObject nameTextObject = new GameObject("DriverNameText");
             nameTextObject.transform.SetParent(car.transform); // Set parent to car
             nameTextObject.transform.localPosition = new Vector3(0, 5, 0); // Adjust position above the car
@@ -71,9 +87,50 @@ public class SmoothTrackingOffline : MonoBehaviour
         }
     }
 
-    void LoadDriverNames()
+    void LoadDriverNamesandColors()
     {
+        string colorsFilePath = $"./{session_key}/colors.csv";
         string driversFilePath = $"./{session_key}/drivers.csv";
+
+        Dictionary<string, (Color, Color)> team_colors = new Dictionary<string, (Color, Color)>();
+        if (File.Exists(colorsFilePath))
+        {
+            using (StreamReader reader = new StreamReader(colorsFilePath))
+            {
+                string line;
+                bool isFirstLine = true;
+                while ((line = reader.ReadLine()) != null)
+                {
+                    if (isFirstLine)
+                    {
+                        // Skip the first line
+                        isFirstLine = false;
+                        continue;
+                    }
+                    string[] fields = line.Split(',');
+                    if (fields.Length >= 3)
+                    {
+                        string teamName = fields[0];
+                        string primaryColorStr = "#" + fields[1];
+                        string bgColorStr = "#" + fields[2];
+                        Color primaryColor, bgColor;
+                        if (ColorUtility.TryParseHtmlString(primaryColorStr, out primaryColor) && ColorUtility.TryParseHtmlString(bgColorStr, out bgColor))
+                        {
+                            team_colors.Add(teamName, (primaryColor, bgColor));
+                        }
+                        else
+                        {
+                            Debug.LogWarning("Invalid hex color string: " + primaryColorStr + " or " + bgColorStr);
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            if (logLevel >= LogLevel.Warning) Debug.LogWarning("Colors file not found!");
+        }
+
         if (File.Exists(driversFilePath))
         {
             using (StreamReader reader = new StreamReader(driversFilePath))
@@ -82,10 +139,12 @@ public class SmoothTrackingOffline : MonoBehaviour
                 while ((line = reader.ReadLine()) != null)
                 {
                     string[] fields = line.Split(',');
-                    if (fields.Length >= 2 && int.TryParse(fields[0], out int driverNumber))
+                    if (fields.Length >= 3 && int.TryParse(fields[0], out int driverNumber))
                     {
                         string driverName = fields[1];
+                        string teamName = fields[2];
                         driver_names[driverNumber] = driverName;
+                        driver_colors[driverNumber] = team_colors[teamName];
                     }
                 }
             }
@@ -101,7 +160,7 @@ public class SmoothTrackingOffline : MonoBehaviour
     {
         // Unload the scene with the specified name
         driver_numbers.Sort();
-
+        
         // Initialize queues
         for (int i = 0; i < driver_numbers.Count; i++)
         {
@@ -134,8 +193,8 @@ public class SmoothTrackingOffline : MonoBehaviour
         if (logLevel == LogLevel.All) Debug.Log("Finish loading trajectories");
 
         // Load driver names
-        LoadDriverNames();
-        if (logLevel == LogLevel.All) Debug.Log("Finish loading driver names");
+        LoadDriverNamesandColors();
+        if (logLevel == LogLevel.All) Debug.Log("Finish loading driver names and colors");
 
         // Instantiate cars
         InstantiateCars();
