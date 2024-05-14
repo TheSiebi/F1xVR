@@ -5,21 +5,28 @@ using System.Globalization;
 using UnityEngine;
 using UnityEngine.Networking;
 using System.IO;
+using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 
 
 // Keep class name the same as file name
 public class SmoothTrackingOffline : MonoBehaviour
 {
+    // Variables for the race
+    public GameObject car_coloured;
     string session_key = "9157";
-    List<int> driver_numbers = new List<int> { 1, 2, 4, 10, 11, 14, 16, 18, 20, 22, 23, 27, 31, 40, 44, 55, 63, 77, 81 };
+    List<int> driver_numbers = new List<int> { 1, 2, 4, 10, 11, 14 }; //, 16, 18, 20, 22, 23, 27, 31, 40, 44, 55, 63, 77, 81 };
     List<Rigidbody> cars_rb = new List<Rigidbody>();
+    Dictionary<int, string> driver_names = new Dictionary<int, string>(); // Dictionary to store driver numbers and names
 
+    // Variables for the trajectories
     int current_tracking_time_idx = 0;
     List<DateTime> listTime = new List<DateTime>(); // List for times
     List<Queue<float>> listX = new List<Queue<float>>(); // List for x positions
     List<Queue<float>> listY = new List<Queue<float>>(); // List for y positions
     Vector3 up = new Vector3(0, 0, 1);
 
+    // Variables for simulating the race
     bool isSimulate = false;
     DateTime startTime;
     DateTime endTime;
@@ -39,25 +46,62 @@ public class SmoothTrackingOffline : MonoBehaviour
         {
             Vector3 position = new Vector3(listX[i].Peek(), listY[i].Peek(), 20);
 
-            GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            sphere.transform.position = position;
-            sphere.transform.localScale = new Vector3(5f, 5f, 5f);
+            GameObject car = Instantiate(car_coloured, position, Quaternion.identity);
+            car.transform.position = position;
+            car.transform.localScale = new Vector3(1f, 1f, 1f);
 
-            SphereCollider sphereCollider = sphere.AddComponent<SphereCollider>();
-            Rigidbody rb = sphere.AddComponent<Rigidbody>();
+            BoxCollider boxCollider = car.AddComponent<BoxCollider>();
+            Rigidbody rb = car.AddComponent<Rigidbody>();
             rb.useGravity = true;
             rb.isKinematic = false;
             rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
             rb.mass = 200;
             cars_rb.Add(rb);
+
+            // Add driver name text
+            GameObject nameTextObject = new GameObject("DriverNameText");
+            nameTextObject.transform.SetParent(car.transform); // Set parent to car
+            nameTextObject.transform.localPosition = new Vector3(0, 5, 0); // Adjust position above the car
+            TextMesh nameText = nameTextObject.AddComponent<TextMesh>();
+            nameText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            nameText.text = driver_names.ContainsKey(driver_numbers[i]) ? driver_names[driver_numbers[i]] : "Unknown"; // Set driver name
+            nameText.anchor = TextAnchor.MiddleCenter;
+            nameText.fontSize = 30;
+            nameText.color = Color.white;
+        }
+    }
+
+    void LoadDriverNames()
+    {
+        string driversFilePath = $"./{session_key}/drivers.csv";
+        if (File.Exists(driversFilePath))
+        {
+            using (StreamReader reader = new StreamReader(driversFilePath))
+            {
+                string line;
+                while ((line = reader.ReadLine()) != null)
+                {
+                    string[] fields = line.Split(',');
+                    if (fields.Length >= 2 && int.TryParse(fields[0], out int driverNumber))
+                    {
+                        string driverName = fields[1];
+                        driver_names[driverNumber] = driverName;
+                    }
+                }
+            }
+        }
+        else
+        {
+            if (logLevel >= LogLevel.Warning) Debug.LogWarning("Drivers file not found!");
         }
     }
 
     // Start is called before the first frame update
     void Start()
     {
+        // Unload the scene with the specified name
         driver_numbers.Sort();
-        
+
         // Initialize queues
         for (int i = 0; i < driver_numbers.Count; i++)
         {
@@ -89,6 +133,11 @@ public class SmoothTrackingOffline : MonoBehaviour
         }
         if (logLevel == LogLevel.All) Debug.Log("Finish loading trajectories");
 
+        // Load driver names
+        LoadDriverNames();
+        if (logLevel == LogLevel.All) Debug.Log("Finish loading driver names");
+
+        // Instantiate cars
         InstantiateCars();
         if (logLevel == LogLevel.All) Debug.Log("Finish instantiation");
     }
