@@ -12,8 +12,12 @@ using UnityEngine.SceneManagement;
 // Keep class name the same as file name
 public class SmoothTrackingOffline : MonoBehaviour
 {
-    // Variables for the race
     public GameObject car_coloured;
+    public GameObject map;
+    public float offset_x = -150; // offset of trajectory origin in map
+    public float offset_y = -2398;
+
+    // Variables for the race
     string session_key = "9157";
     List<int> driver_numbers = new List<int> { 1, 2, 4, 10, 11, 14, 16, 18, 20, 22, 23, 27, 31, 40, 44, 55, 63, 77, 81 };
     List<Rigidbody> cars_rb = new List<Rigidbody>();
@@ -25,7 +29,7 @@ public class SmoothTrackingOffline : MonoBehaviour
     List<DateTime> listTime = new List<DateTime>(); // List for times
     List<Queue<float>> listX = new List<Queue<float>>(); // List for x positions
     List<Queue<float>> listY = new List<Queue<float>>(); // List for y positions
-    Vector3 up = new Vector3(0, 0, 1);
+    Vector3 up = new Vector3(0, 1, 0);
 
     // Variables for simulating the race
     bool isSimulate = false;
@@ -35,7 +39,7 @@ public class SmoothTrackingOffline : MonoBehaviour
     float startTimeUnity;
     float endX, endY;
     List<float> startX = new List<float>();
-    List<float> startY = new List<float>();
+    List<float> startZ = new List<float>();
     List<Quaternion> startDir = new List<Quaternion>();
 
     LogLevel logLevel = LogLevel.All;
@@ -46,9 +50,10 @@ public class SmoothTrackingOffline : MonoBehaviour
         for (int i = 0; i < driver_numbers.Count; i++)
         {
             // Position
-            Vector3 position = new Vector3(listX[i].Peek(), listY[i].Peek(), 20);
-            GameObject car = Instantiate(car_coloured, position, Quaternion.identity);
-            car.transform.position = position;
+            GameObject car = Instantiate(car_coloured);
+            car.transform.SetParent(map.transform);
+            Vector3 position = new Vector3(listX[i].Peek(), listY[i].Peek(), -100);
+            car.transform.localPosition = position;
             car.transform.localScale = new Vector3(1f, 1f, 1f);
 
             // Color
@@ -77,7 +82,8 @@ public class SmoothTrackingOffline : MonoBehaviour
             // Name text
             GameObject nameTextObject = new GameObject("DriverNameText");
             nameTextObject.transform.SetParent(car.transform); // Set parent to car
-            nameTextObject.transform.localPosition = new Vector3(0, 5, 0); // Adjust position above the car
+            nameTextObject.transform.localPosition = new Vector3(0, 0, 5); // Adjust position above the car
+            nameTextObject.transform.localRotation = Quaternion.Euler(0, 180, 0);
             TextMesh nameText = nameTextObject.AddComponent<TextMesh>();
             nameText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             nameText.text = driver_names.ContainsKey(driver_numbers[i]) ? driver_names[driver_numbers[i]] : "Unknown"; // Set driver name
@@ -160,14 +166,14 @@ public class SmoothTrackingOffline : MonoBehaviour
     {
         // Unload the scene with the specified name
         driver_numbers.Sort();
-        
+
         // Initialize queues
         for (int i = 0; i < driver_numbers.Count; i++)
         {
             listX.Add(new Queue<float>());
             listY.Add(new Queue<float>());
             startX.Add(0);
-            startY.Add(0);
+            startZ.Add(0);
             startDir.Add(Quaternion.identity);
         }
 
@@ -239,8 +245,8 @@ public class SmoothTrackingOffline : MonoBehaviour
                 if (float.TryParse(fields[1], out float x) &&
                     float.TryParse(fields[2], out float y))
                 {
-                    listX[driver_index].Enqueue(-x * 0.1f);
-                    listY[driver_index].Enqueue(y * 0.1f);
+                    listX[driver_index].Enqueue(offset_x - x * 0.1f); // Local in map
+                    listY[driver_index].Enqueue(offset_y + y * 0.1f);
                 }
             }
         }
@@ -257,14 +263,16 @@ public class SmoothTrackingOffline : MonoBehaviour
                 {
                     endX = listX[i].Peek();
                     endY = listY[i].Peek();
-                    Vector3 startPosition = new Vector3(startX[i], startY[i], cars_rb[i].position.z);
-                    Vector3 targetPosition = new Vector3(endX, endY, cars_rb[i].position.z);
+                    Vector3 startPosition = new Vector3(startX[i], cars_rb[i].position.y, startZ[i]);
+                    Vector3 targetLocalPosition = new Vector3(endX, endY, 0);
+                    Vector3 targetPosition = map.transform.TransformPoint(targetLocalPosition);
+                    targetPosition.y = cars_rb[i].position.y;
                     cars_rb[i].MovePosition(Vector3.Lerp(startPosition, targetPosition, sec_passed / duration));
 
                     if (logLevel == LogLevel.All)
                     {
                         Debug.Log("Lerp update driver " + driver_numbers[i].ToString() +
-                            " x=" + cars_rb[i].position.x.ToString() + " y=" + cars_rb[i].position.y.ToString() +
+                            " x=" + cars_rb[i].position.x.ToString() + " z=" + cars_rb[i].position.z.ToString() +
                             "by time " + sec_passed.ToString() + "/" + duration.ToString() + "for destination time " + endTime.ToString("yyyy-MM-ddTHH:mm:ss.ffffffzzz"));
                     }
                     Vector3 direction = (targetPosition - startPosition).normalized;
@@ -290,9 +298,9 @@ public class SmoothTrackingOffline : MonoBehaviour
             duration = (float)(endTime - startTime).TotalSeconds;
             for (int i = 0; i < driver_numbers.Count; i++)
             {
-                startX[i] = cars_rb[i].position.x;
+                startX[i] = cars_rb[i].position.x; // World frame
                 listX[i].Dequeue();
-                startY[i] = cars_rb[i].position.y;
+                startZ[i] = cars_rb[i].position.z;
                 listY[i].Dequeue();
                 startDir[i] = cars_rb[i].rotation;
             }
