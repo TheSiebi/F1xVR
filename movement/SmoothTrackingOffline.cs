@@ -27,7 +27,7 @@ public class SmoothTrackingOffline : MonoBehaviour
     // Variables for the trajectories
     int current_tracking_time_idx = 0;
     List<DateTime> listTime = new List<DateTime>(); // List for times
-    List<Queue<float>> listX = new List<Queue<float>>(); // List for x positions
+    List<Queue<float>> listX = new List<Queue<float>>(); // List for x positions in map frame
     List<Queue<float>> listY = new List<Queue<float>>(); // List for y positions
     Vector3 up = new Vector3(0, 1, 0);
 
@@ -38,9 +38,9 @@ public class SmoothTrackingOffline : MonoBehaviour
     float duration;
     float startTimeUnity;
     float endX, endY;
-    List<float> startX = new List<float>();
-    List<float> startZ = new List<float>();
-    List<Quaternion> startDir = new List<Quaternion>();
+    List<float> startX = new List<float>(); // in map frame
+    List<float> startY = new List<float>();
+    List<Quaternion> startDir = new List<Quaternion>(); // in map frame
 
     LogLevel logLevel = LogLevel.All;
 
@@ -71,9 +71,9 @@ public class SmoothTrackingOffline : MonoBehaviour
             }
 
             // Rigidbody
-            BoxCollider boxCollider = car.AddComponent<BoxCollider>();
+            //BoxCollider boxCollider = car.AddComponent<BoxCollider>();
             Rigidbody rb = car.AddComponent<Rigidbody>();
-            rb.useGravity = true;
+            rb.useGravity = false;
             rb.isKinematic = false;
             rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
             rb.mass = 200;
@@ -173,7 +173,7 @@ public class SmoothTrackingOffline : MonoBehaviour
             listX.Add(new Queue<float>());
             listY.Add(new Queue<float>());
             startX.Add(0);
-            startZ.Add(0);
+            startY.Add(0);
             startDir.Add(Quaternion.identity);
         }
 
@@ -263,9 +263,11 @@ public class SmoothTrackingOffline : MonoBehaviour
                 {
                     endX = listX[i].Peek();
                     endY = listY[i].Peek();
-                    Vector3 startPosition = new Vector3(startX[i], cars_rb[i].position.y, startZ[i]);
+                    Vector3 startLocalPosition = new Vector3(startX[i], startY[i], 0);
+                    Vector3 startPosition = map.transform.TransformPoint(startLocalPosition);
                     Vector3 targetLocalPosition = new Vector3(endX, endY, 0);
                     Vector3 targetPosition = map.transform.TransformPoint(targetLocalPosition);
+                    startPosition.y = cars_rb[i].position.y;
                     targetPosition.y = cars_rb[i].position.y;
                     cars_rb[i].MovePosition(Vector3.Lerp(startPosition, targetPosition, sec_passed / duration));
 
@@ -278,8 +280,9 @@ public class SmoothTrackingOffline : MonoBehaviour
                     Vector3 direction = (targetPosition - startPosition).normalized;
                     if (direction != Vector3.zero)
                     {
+                        Quaternion startRotation = map.transform.rotation * startDir[i];
                         Quaternion targetRotation = Quaternion.LookRotation(direction, up);
-                        cars_rb[i].MoveRotation(Quaternion.Lerp(startDir[i], targetRotation, sec_passed / duration));
+                        cars_rb[i].MoveRotation(Quaternion.Lerp(startRotation, targetRotation, sec_passed / duration));
                     }
                 }
             }
@@ -298,11 +301,13 @@ public class SmoothTrackingOffline : MonoBehaviour
             duration = (float)(endTime - startTime).TotalSeconds;
             for (int i = 0; i < driver_numbers.Count; i++)
             {
-                startX[i] = cars_rb[i].position.x; // World frame
+                Vector3 startLocalPosition = map.transform.InverseTransformPoint(cars_rb[i].position);
+                startX[i] = startLocalPosition.x;
                 listX[i].Dequeue();
-                startZ[i] = cars_rb[i].position.z;
+                startY[i] = startLocalPosition.y;
                 listY[i].Dequeue();
-                startDir[i] = cars_rb[i].rotation;
+                Quaternion startLocalRotation = Quaternion.Inverse(map.transform.rotation) * cars_rb[i].rotation;
+                startDir[i] = startLocalRotation;
             }
             isSimulate = true;
         }
