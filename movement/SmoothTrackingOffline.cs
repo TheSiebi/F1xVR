@@ -18,8 +18,8 @@ public class SmoothTrackingOffline : MonoBehaviour
     public float offset_y = -2398;
 
     // Variables for the race
-    string session_key = "9157";
-    List<int> driver_numbers = new List<int> { 1, 2, 4, 10, 11, 14, 16, 18, 20, 22, 23, 27, 31, 40, 44, 55, 63, 77, 81 };
+    public string session_key = "9173";
+    List<int> driver_numbers = new List<int> { 1 }; //, 2, 4, 10, 11, 14, 16, 18, 20, 22, 23, 27, 31, 40, 44, 55, 63, 77, 81 };
     List<Rigidbody> cars_rb = new List<Rigidbody>();
     Dictionary<int, string> driver_names = new Dictionary<int, string>(); // Dictionary to store driver numbers and names
     Dictionary<int, (Color, Color)> driver_colors = new Dictionary<int, (Color, Color)>();
@@ -54,7 +54,7 @@ public class SmoothTrackingOffline : MonoBehaviour
             car.transform.SetParent(map.transform);
             Vector3 position = new Vector3(listX[i].Peek(), listY[i].Peek(), -100);
             car.transform.localPosition = position;
-            car.transform.localScale = new Vector3(1f, 1f, 1f);
+            car.transform.localScale = new Vector3(3f, 3f, 3f);
 
             // Color
             Renderer renderer = car.GetComponent<Renderer>();
@@ -90,13 +90,14 @@ public class SmoothTrackingOffline : MonoBehaviour
             nameText.anchor = TextAnchor.MiddleCenter;
             nameText.fontSize = 30;
             nameText.color = Color.white;
+            nameText.transform.localScale = new Vector3(3f, 3f, 3f);
         }
     }
 
     void LoadDriverNamesandColors()
     {
-        string colorsFilePath = $"./{session_key}/colors.csv";
-        string driversFilePath = $"./{session_key}/drivers.csv";
+        string colorsFilePath = Path.Combine(Application.dataPath, "Resources", "colors.csv");
+        string driversFilePath = Path.Combine(Application.dataPath, "Resources", session_key, "drivers.csv");
 
         Dictionary<string, (Color, Color)> team_colors = new Dictionary<string, (Color, Color)>();
         if (File.Exists(colorsFilePath))
@@ -166,7 +167,7 @@ public class SmoothTrackingOffline : MonoBehaviour
     {
         // Unload the scene with the specified name
         driver_numbers.Sort();
-
+        
         // Initialize queues
         for (int i = 0; i < driver_numbers.Count; i++)
         {
@@ -182,7 +183,10 @@ public class SmoothTrackingOffline : MonoBehaviour
         // Load trajectories
         foreach (int driverNumber in driver_numbers)
         {
-            string filePath = $"./{session_key}/car_{driverNumber}_interpolated.csv";
+            string directoryPath = Path.Combine(Application.dataPath, "Resources", session_key);
+            string fileName = $"car_{driverNumber}_interpolated.csv";
+            string filePath = Path.Combine(directoryPath, fileName);
+
             if (File.Exists(filePath))
             {
                 if (listTime.Count == 0)
