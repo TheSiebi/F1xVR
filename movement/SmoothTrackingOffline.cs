@@ -14,12 +14,13 @@ public class SmoothTrackingOffline : MonoBehaviour
 {
     public GameObject car_coloured;
     public GameObject map;
-    public float offset_x = -150; // offset of trajectory origin in map
-    public float offset_y = -2398;
+    public float offset_x = 0; // offset of trajectory origin in map
+    public float offset_y = 0;
+    public float offset_z = 0;
 
     // Variables for the race
-    public string session_key = "9173";
-    List<int> driver_numbers = new List<int> { 1 }; //, 2, 4, 10, 11, 14, 16, 18, 20, 22, 23, 27, 31, 40, 44, 55, 63, 77, 81 };
+    public string session_key = "9133";
+    List<int> driver_numbers = new List<int>();
     List<Rigidbody> cars_rb = new List<Rigidbody>();
     Dictionary<int, string> driver_names = new Dictionary<int, string>(); // Dictionary to store driver numbers and names
     Dictionary<int, (Color, Color)> driver_colors = new Dictionary<int, (Color, Color)>();
@@ -29,6 +30,7 @@ public class SmoothTrackingOffline : MonoBehaviour
     List<DateTime> listTime = new List<DateTime>(); // List for times
     List<Queue<float>> listX = new List<Queue<float>>(); // List for x positions in map frame
     List<Queue<float>> listY = new List<Queue<float>>(); // List for y positions
+    List<Queue<float>> listZ = new List<Queue<float>>(); // List for z positions
     Vector3 up = new Vector3(0, 1, 0);
 
     // Variables for simulating the race
@@ -37,9 +39,10 @@ public class SmoothTrackingOffline : MonoBehaviour
     DateTime endTime;
     float duration;
     float startTimeUnity;
-    float endX, endY;
+    float endX, endY, endZ;
     List<float> startX = new List<float>(); // in map frame
     List<float> startY = new List<float>();
+    List<float> startZ = new List<float>();
     List<Quaternion> startDir = new List<Quaternion>(); // in map frame
 
     LogLevel logLevel = LogLevel.All;
@@ -52,7 +55,7 @@ public class SmoothTrackingOffline : MonoBehaviour
             // Position
             GameObject car = Instantiate(car_coloured);
             car.transform.SetParent(map.transform);
-            Vector3 position = new Vector3(listX[i].Peek(), listY[i].Peek(), -100);
+            Vector3 position = new Vector3(listX[i].Peek(), listY[i].Peek(), listZ[i].Peek());
             car.transform.localPosition = position;
             car.transform.localScale = new Vector3(3f, 3f, 3f);
 
@@ -162,9 +165,34 @@ public class SmoothTrackingOffline : MonoBehaviour
         }
     }
 
+    void LoadDriverNumbers(){
+        string driversFilePath = Path.Combine(Application.dataPath, "Resources", session_key, "drivers.csv");
+        if (File.Exists(driversFilePath))
+        {
+            using (StreamReader reader = new StreamReader(driversFilePath))
+            {
+                string line;
+                while ((line = reader.ReadLine()) != null)
+                {
+                    string[] fields = line.Split(',');
+                    if (fields.Length >= 3 && int.TryParse(fields[0], out int driverNumber))
+                    {
+                        driver_numbers.Add(driverNumber);
+                    }
+                }
+            }
+        }
+        else
+        {
+            if (logLevel >= LogLevel.Warning) Debug.LogWarning("Drivers file not found!");
+        }
+    }
+
     // Start is called before the first frame update
     void Start()
     {
+        // Load the driver numbers
+        LoadDriverNumbers();
         // Unload the scene with the specified name
         driver_numbers.Sort();
         
@@ -173,8 +201,10 @@ public class SmoothTrackingOffline : MonoBehaviour
         {
             listX.Add(new Queue<float>());
             listY.Add(new Queue<float>());
+            listZ.Add(new Queue<float>());
             startX.Add(0);
             startY.Add(0);
+            startZ.Add(0);
             startDir.Add(Quaternion.identity);
         }
 
@@ -247,10 +277,11 @@ public class SmoothTrackingOffline : MonoBehaviour
                 }
                 int driver_index = driver_numbers.IndexOf(driverNumber);
                 if (float.TryParse(fields[1], out float x) &&
-                    float.TryParse(fields[2], out float y))
+                    float.TryParse(fields[2], out float y) && float.TryParse(fields[3], out float z))
                 {
                     listX[driver_index].Enqueue(offset_x - x * 0.1f); // Local in map
                     listY[driver_index].Enqueue(offset_y + y * 0.1f);
+                    listZ[driver_index].Enqueue(offset_z + z * 0.1f);
                 }
             }
         }
@@ -267,12 +298,11 @@ public class SmoothTrackingOffline : MonoBehaviour
                 {
                     endX = listX[i].Peek();
                     endY = listY[i].Peek();
-                    Vector3 startLocalPosition = new Vector3(startX[i], startY[i], 0);
+                    endZ = listZ[i].Peek();
+                    Vector3 startLocalPosition = new Vector3(startX[i], startY[i], startZ[i]);
                     Vector3 startPosition = map.transform.TransformPoint(startLocalPosition);
-                    Vector3 targetLocalPosition = new Vector3(endX, endY, 0);
+                    Vector3 targetLocalPosition = new Vector3(endX, endY, endZ);
                     Vector3 targetPosition = map.transform.TransformPoint(targetLocalPosition);
-                    startPosition.y = cars_rb[i].position.y;
-                    targetPosition.y = cars_rb[i].position.y;
                     cars_rb[i].MovePosition(Vector3.Lerp(startPosition, targetPosition, sec_passed / duration));
 
                     if (logLevel == LogLevel.All)
@@ -292,7 +322,7 @@ public class SmoothTrackingOffline : MonoBehaviour
             }
             else
             {
-                // TODO set the final position to endX, endY
+                // TODO set the final position to endX, endY, endZ
                 current_tracking_time_idx++;
                 isSimulate = false;
             }
@@ -310,6 +340,8 @@ public class SmoothTrackingOffline : MonoBehaviour
                 listX[i].Dequeue();
                 startY[i] = startLocalPosition.y;
                 listY[i].Dequeue();
+                startZ[i] = startLocalPosition.z;
+                listZ[i].Dequeue();
                 Quaternion startLocalRotation = Quaternion.Inverse(map.transform.rotation) * cars_rb[i].rotation;
                 startDir[i] = startLocalRotation;
             }
