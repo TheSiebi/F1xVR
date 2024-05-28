@@ -94,6 +94,7 @@ public class SmoothTrackingOffline : MonoBehaviour
             nameText.fontSize = 30;
             nameText.color = Color.white;
             nameText.transform.localScale = new Vector3(3f, 3f, 3f);
+            nameTextObject.AddComponent<FaceCamera>();
         }
     }
 
@@ -304,7 +305,7 @@ public class SmoothTrackingOffline : MonoBehaviour
                     Vector3 targetLocalPosition = new Vector3(endX, endY, endZ);
                     Vector3 targetPosition = map.transform.TransformPoint(targetLocalPosition);
                     cars_rb[i].MovePosition(Vector3.Lerp(startPosition, targetPosition, sec_passed / duration));
-
+                    
                     if (logLevel == LogLevel.All)
                     {
                         Debug.Log("Lerp update driver " + driver_numbers[i].ToString() +
