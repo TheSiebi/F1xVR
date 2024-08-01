@@ -25,7 +25,7 @@ The Show element allows the user to toggle the in game menu (Canvas). The mesh_s
 <p align="left">
   <img src="readme_resources/map.png" width="40%" />
 </p>
-Here monza_level_3_scaled(Clone) is the map mesh with all interaction elements and colliders ect. The car_coloured(Clone) are all the cares from the race which get added using the SmoothTrackingOffline script found in the F1_VR/F1xVR/movement folder. This script assigns the correct color to the car and is responsible for making the car move on the map using the driver session data.
+Here monza_level_3_scaled(Clone) is the map mesh with all interaction elements and colliders ect. The car_coloured(Clone) are all the cares from the race which get added using the SmoothTrackingOffline script found in the F1_VR/Scripts/movement folder. This script assigns the correct color to the car and is responsible for making the car move on the map using the driver session data.
 
 ## Model
 The car was modeled in Blender and the maps were downloaded using [Blosm for Blender](https://github.com/vvoovv/blosm) and cut to size using Blender.
