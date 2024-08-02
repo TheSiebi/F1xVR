@@ -1,0 +1,2 @@
+circuit_key,circuit_short_name,country_code,country_key,country_name,date_end,date_start,gmt_offset,location,meeting_key,session_key,session_name,session_type,year
+4,Hungaroring,HUN,14,Hungary,2023-07-23 15:00:00+00:00,2023-07-23 13:00:00+00:00,02:00:00,Budapest,1215,9133,Race,Race,2023
